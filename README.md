@@ -143,9 +143,11 @@ Built with **Next.js**, **MapLibre GL**, **FastAPI**, and **Python**, it's desig
 If you just want to run the dashboard without dealing with terminal commands:
 
 1. Go to the **[Releases](../../releases)** tab on the right side of this GitHub page.
-2. Download the `ShadowBroker_vX.X.zip` file.
+2. Download the `ShadowBroker_v0.1.zip` file.
 3. Extract the folder to your computer.
-4. Double-click the **`start.bat`** file. It will automatically install everything and launch the dashboard!
+4. **Windows:** Double-click `start.bat`.
+   **Mac/Linux:** Open terminal, type `chmod +x start.sh`, and run `./start.sh`.
+5. It will automatically install everything and launch the dashboard!
 
 ---
 
