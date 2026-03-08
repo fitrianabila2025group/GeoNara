@@ -14,7 +14,10 @@ import os
 logger = logging.getLogger(__name__)
 
 AIS_WS_URL = "wss://stream.aisstream.io/v0/stream"
-API_KEY = os.environ.get("AIS_API_KEY", "75cc39af03c9cc23c90e8a7b3c3bc2b2a507c5fb")
+API_KEY = (
+    os.environ.get("AISSTREAM_API_KEY")
+    or os.environ.get("AIS_API_KEY")
+)
 
 # AIS vessel type code classification
 # See: https://coast.noaa.gov/data/marinecadastre/ais/VesselTypeCodes2018.pdf
@@ -165,6 +168,12 @@ def _load_cache():
                     _vessels[int(k)] = v
                     loaded += 1
         logger.info(f"AIS cache loaded: {loaded} vessels from disk")
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to load AIS cache (invalid JSON): {e}. Resetting cache file.")
+        try:
+            os.remove(CACHE_FILE)
+        except OSError:
+            pass
     except Exception as e:
         logger.error(f"Failed to load AIS cache: {e}")
 
@@ -344,6 +353,10 @@ def start_ais_stream():
     
     # Load cached vessel data from disk
     _load_cache()
+
+    if not API_KEY:
+        logger.warning("AIS stream disabled: missing AISSTREAM_API_KEY/AIS_API_KEY")
+        return
     
     _ws_running = True
     _ws_thread = threading.Thread(target=_run_ais_loop, daemon=True, name="ais-stream")

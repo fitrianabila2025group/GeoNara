@@ -4,7 +4,13 @@ import base64
 import urllib.parse
 import re
 from playwright.sync_api import sync_playwright
-from playwright_stealth import stealth_sync
+
+try:
+    from playwright_stealth import stealth_sync
+except ImportError:
+    def stealth_sync(_page):
+        # Compatibility fallback for newer playwright-stealth releases.
+        return None
 
 logger = logging.getLogger(__name__)
 

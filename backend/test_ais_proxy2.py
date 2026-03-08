@@ -5,7 +5,10 @@ import time
 import sys
 
 proxy_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ais_proxy.js")
-API_KEY = "75cc39af03c9cc23c90e8a7b3c3bc2b2a507c5fb"
+API_KEY = os.environ.get("AISSTREAM_API_KEY") or os.environ.get("AIS_API_KEY")
+
+if not API_KEY:
+    raise SystemExit("Set AISSTREAM_API_KEY or AIS_API_KEY before running this test.")
 
 print(f"Proxy script: {proxy_script}")
 
