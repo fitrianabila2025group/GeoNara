@@ -141,7 +141,7 @@ Built with **Next.js**, **MapLibre GL**, **FastAPI**, and **Python**, it's desig
 
 ### 🐳 Docker Setup (Recommended for Self-Hosting)
 
-You can run the dashboard easily using the pre-built Docker images hosted on GitHub Container Registry (GHCR).
+Pre-built images are available on GitHub Container Registry (GHCR).
 
 1. Create a `docker-compose.yml` file:
 
@@ -150,20 +150,21 @@ version: '3.8'
 
 services:
   backend:
-    image: ghcr.io/<your-username>/live-risk-dashboard-backend:main
+    image: ghcr.io/bigbodycobain/shadowbroker-backend:latest
     container_name: shadowbroker-backend
     ports:
       - "8000:8000"
     environment:
       - AISSTREAM_API_KEY=${AISSTREAM_API_KEY}
       - N2YO_API_KEY=${N2YO_API_KEY}
-      # Add other required environment variables here
+      - OPENSKY_USERNAME=${OPENSKY_USERNAME:-}
+      - OPENSKY_PASSWORD=${OPENSKY_PASSWORD:-}
     volumes:
       - backend_data:/app/data
     restart: unless-stopped
 
   frontend:
-    image: ghcr.io/<your-username>/live-risk-dashboard-frontend:main
+    image: ghcr.io/bigbodycobain/shadowbroker-frontend:latest
     container_name: shadowbroker-frontend
     ports:
       - "3000:3000"
@@ -177,9 +178,17 @@ volumes:
   backend_data:
 ```
 
-1. Create a `.env` file in the same directory with your API keys.
-2. Run `docker-compose up -d`.
-3. Access the dashboard at `http://localhost:3000`.
+2. Create a `.env` file with your API keys:
+
+```env
+AISSTREAM_API_KEY=your_key_here
+N2YO_API_KEY=your_key_here
+```
+
+3. Run `docker compose up -d`
+4. Access at `http://localhost:3000`
+
+**For forks:** Replace `bigbodycobain/shadowbroker` with your GitHub username/repo name.
 
 ---
 
