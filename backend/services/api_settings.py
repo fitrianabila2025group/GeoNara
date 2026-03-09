@@ -160,6 +160,20 @@ def update_api_key(env_key: str, new_value: str) -> bool:
     if not ENV_PATH.exists():
         return False
 
+    # Validate env_key against allowed keys to prevent arbitrary env manipulation
+    allowed_keys = {api["env_key"] for api in API_REGISTRY if api["env_key"]}
+    if env_key not in allowed_keys:
+        logger.warning(f"Attempted to update unauthorized env_key: {env_key}")
+        return False
+
+    # Validate new_value to prevent injection attacks
+    if not isinstance(new_value, str):
+        return False
+    # Reject values with newlines or potentially dangerous characters
+    if "\n" in new_value or "\r" in new_value:
+        logger.warning(f"Rejected env value with line breaks for {env_key}")
+        return False
+
     # Update os.environ immediately
     os.environ[env_key] = new_value
 

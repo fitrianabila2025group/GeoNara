@@ -1,7 +1,12 @@
 const WebSocket = require('ws');
 
 const args = process.argv.slice(2);
-const API_KEY = args[0] || '75cc39af03c9cc23c90e8a7b3c3bc2b2a507c5fb';
+const API_KEY = args[0] || process.env.AIS_API_KEY || '';
+
+if (!API_KEY) {
+    console.error('Error: AIS_API_KEY is required. Set it as an environment variable or pass it as an argument.');
+    process.exit(1);
+}
 
 const FILTER = [
     // US Aircraft Carriers and major naval groups

@@ -3,6 +3,12 @@ import logging
 from cachetools import cached, TTLCache
 from datetime import datetime
 from services.network_utils import fetch_with_curl
+import html
+
+
+def _escape_html(text: str) -> str:
+    """Escape HTML special characters to prevent XSS attacks."""
+    return html.escape(text, quote=True)
 
 logger = logging.getLogger(__name__)
 
@@ -285,12 +291,19 @@ def fetch_global_military_incidents():
             headlines = [_url_to_headline(u) for u in urls]
             f["properties"]["_urls_list"] = urls
             f["properties"]["_headlines_list"] = headlines
-            # Keep html as fallback
+            # Keep html as fallback - properly escape to prevent XSS
             if urls:
-                links = [f'<div style="margin-bottom:6px;"><a href="{u}" target="_blank">{h}</a></div>' for u, h in zip(urls, headlines)]
-                f["properties"]["html"] = ''.join(links)
+                # Validate and escape URLs to prevent XSS
+                safe_links = []
+                for u, h in zip(urls, headlines):
+                    # Only allow http/https URLs
+                    if u and (u.startswith('http://') or u.startswith('https://')):
+                        safe_url = _escape_html(u)
+                        safe_headline = _escape_html(h)
+                        safe_links.append(f'<div style="margin-bottom:6px;"><a href="{safe_url}" target="_blank" rel="noopener noreferrer">{safe_headline}</a></div>')
+                f["properties"]["html"] = ''.join(safe_links)
             else:
-                f["properties"]["html"] = f["properties"]["name"]
+                f["properties"]["html"] = _escape_html(f["properties"]["name"])
             f.pop("_loc_key", None)
 
         logger.info(f"GDELT multi-file parsed: {len(features)} conflict locations from {successful} files")

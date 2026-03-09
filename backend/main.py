@@ -27,9 +27,14 @@ app = FastAPI(title="Live Risk Dashboard API", lifespan=lifespan)
 
 from fastapi.middleware.gzip import GZipMiddleware
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+# Configure CORS with more restrictive settings
+# Use environment variable to configure allowed origins
+import os
+_allowed_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # For prototyping, allow all
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
