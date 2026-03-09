@@ -16,9 +16,8 @@ _retry = Retry(total=2, backoff_factor=0.5, status_forcelist=[502, 503, 504])
 _session.mount("https://", HTTPAdapter(max_retries=_retry, pool_maxsize=20))
 _session.mount("http://", HTTPAdapter(max_retries=_retry, pool_maxsize=10))
 
-# Find bash for curl fallback — Git bash's curl has the TLS features
-# needed to pass CDN fingerprint checks (brotli, zstd, libpsl)
-_BASH_PATH = shutil.which("bash") or "bash"
+# Find curl for fallback — using system curl directly
+_CURL_PATH = shutil.which("curl") or "curl"
 
 # Cache domains where requests fails — skip straight to curl for 5 minutes
 _domain_fail_cache: dict[str, float] = {}
@@ -42,9 +41,8 @@ class _DummyResponse:
 def fetch_with_curl(url, method="GET", json_data=None, timeout=15, headers=None):
     """Wrapper to bypass aggressive local firewall that blocks Python but permits curl.
 
-    Falls back to running curl through Git bash, which has the TLS features
-    (brotli, zstd, libpsl) needed to pass CDN fingerprint checks that block
-    both Python requests and the barebones Windows system curl.
+    Falls back to running curl with proper argument list to prevent command injection.
+    This is a SECURITY FIX - using subprocess with argument list instead of shell=True.
     """
     default_headers = {
         "User-Agent": "ShadowBroker-OSINT/1.0 (live-risk-dashboard)",
@@ -68,31 +66,69 @@ def fetch_with_curl(url, method="GET", json_data=None, timeout=15, headers=None)
             _domain_fail_cache.pop(domain, None)
             return res
         except Exception as e:
-            logger.warning(f"Python requests failed for {url} ({e}), falling back to bash curl...")
+            logger.warning(f"Python requests failed for {url} ({e}), falling back to curl...")
             _domain_fail_cache[domain] = time.time()
 
-        # Build curl command string for bash execution
-        header_flags = " ".join(f'-H "{k}: {v}"' for k, v in default_headers.items())
-        if method == "POST" and json_data:
-            payload = json.dumps(json_data).replace('"', '\\"')
-            curl_cmd = f'curl -s -w "\\n%{{http_code}}" {header_flags} -X POST -H "Content-Type: application/json" -d "{payload}" "{url}"'
-        else:
-            curl_cmd = f'curl -s -w "\\n%{{http_code}}" {header_flags} "{url}"'
+    # Build curl command as argument list (SAFE - no shell injection)
+    # Using subprocess with list prevents command injection
+    curl_args = [
+        _CURL_PATH,
+        "-s",                    # Silent mode
+        "-w", "\\n%{http_code}", # Write HTTP status code at the end
+        "-S",                    # Show errors
+    ]
+
+    # Add headers safely as separate arguments
+    for k, v in default_headers.items():
+        curl_args.extend(["-H", f"{k}: {v}"])
+
+    if method == "POST" and json_data:
+        curl_args.extend(["-X", "POST"])
+        curl_args.append("-H")
+        curl_args.append("Content-Type: application/json")
+        # Use --data-binary with @- to read from stdin for safe data passing
+        payload = json.dumps(json_data)
+        curl_args.extend(["--data-binary", "@-"])
+        curl_args.append(url)
+
+        try:
+            # Pass payload via stdin to prevent shell escaping issues
+            res = subprocess.run(
+                curl_args,
+                input=payload,
+                capture_output=True,
+                text=True,
+                timeout=timeout + 5
+            )
+        except subprocess.TimeoutExpired:
+            logger.error(f"curl timeout for {url}")
+            return _DummyResponse(500, "")
+        except FileNotFoundError:
+            logger.error("curl executable not found")
+            return _DummyResponse(500, "")
+    else:
+        curl_args.append(url)
 
         try:
             res = subprocess.run(
-                [_BASH_PATH, "-c", curl_cmd],
-                capture_output=True, text=True, timeout=timeout + 5
+                curl_args,
+                capture_output=True,
+                text=True,
+                timeout=timeout + 5
             )
-            if res.returncode == 0 and res.stdout.strip():
-                # Parse HTTP status code from -w output (last line)
-                lines = res.stdout.rstrip().rsplit("\n", 1)
-                body = lines[0] if len(lines) > 1 else res.stdout
-                http_code = int(lines[-1]) if len(lines) > 1 and lines[-1].strip().isdigit() else 200
-                return _DummyResponse(http_code, body)
-            else:
-                logger.error(f"bash curl fallback failed: exit={res.returncode} stderr={res.stderr[:200]}")
-                return _DummyResponse(500, "")
-        except Exception as curl_e:
-            logger.error(f"bash curl fallback exception: {curl_e}")
+        except subprocess.TimeoutExpired:
+            logger.error(f"curl timeout for {url}")
             return _DummyResponse(500, "")
+        except FileNotFoundError:
+            logger.error("curl executable not found")
+            return _DummyResponse(500, "")
+
+    if res.returncode == 0 and res.stdout.strip():
+        # Parse HTTP status code from -w output (last line)
+        lines = res.stdout.rstrip().rsplit("\n", 1)
+        body = lines[0] if len(lines) > 1 else res.stdout
+        http_code = int(lines[-1]) if len(lines) > 1 and lines[-1].strip().isdigit() else 200
+        return _DummyResponse(http_code, body)
+    else:
+        logger.error(f"curl failed: exit={res.returncode} stderr={res.stderr[:200]}")
+        return _DummyResponse(500, "")
