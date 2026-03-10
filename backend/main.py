@@ -13,6 +13,8 @@ import socket
 
 logging.basicConfig(level=logging.INFO)
 
+GITHUB_FORWARDED_ORIGIN_REGEX = r"https://.*-(3000|[0-9]+)\.(app\.github\.dev|github\.dev)$"
+
 
 def _build_cors_origins():
     """Build a CORS origins whitelist: localhost + LAN IPs + env overrides.
@@ -58,6 +60,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_build_cors_origins(),
+    allow_origin_regex=GITHUB_FORWARDED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
