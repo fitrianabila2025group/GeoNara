@@ -1,0 +1,5 @@
+[env]
+AIS_API_KEY="f31cd57ff8a4f1f4922702ec16cb9d94ca7abf18"
+OPENSKY_CLIENT_ID="suranyami-api-client"
+OPENSKY_CLIENT_SECRET="pltL6KQZ7vrMnmi7842H86tD2eOlCvwK"
+BACKEND_URL="http://localhost:8000"
