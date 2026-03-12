@@ -94,3 +94,6 @@ clean_zip.py
 zip_repo.py
 refactor_cesium.py
 jobs.json
+
+.claude
+.mise.local.toml

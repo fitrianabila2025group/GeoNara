@@ -9,15 +9,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
+# Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install Node.js dependencies (ws module for AIS WebSocket proxy)
+# Copy manifests first so this layer is cached unless deps change
+COPY package*.json ./
+RUN npm install --omit=dev
+
 # Copy source code
 COPY . .
-
-# Install Node.js dependencies (ws module for AIS WebSocket proxy)
-RUN npm install --omit=dev
 
 # Create a non-root user for security
 RUN adduser --system --uid 1001 backenduser \
