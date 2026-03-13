@@ -1691,7 +1691,7 @@ def fetch_internet_outages():
     if outages:
         _mark_fresh("internet_outages")
 
-_DC_GEOCODED_PATH = Path(__file__).parent.parent / "data" / "datacenters_geocoded.json"
+_DC_GEOCODED_PATH = Path(__file__).parent.parent / "data" / "datacenters.json"
 
 
 def fetch_datacenters():
@@ -1703,8 +1703,9 @@ def fetch_datacenters():
             return
         raw = json.loads(_DC_GEOCODED_PATH.read_text(encoding="utf-8"))
         for entry in raw:
-            lat = entry.get("lat")
-            lng = entry.get("lng")
+            coords = entry.get("city_coords") or [entry.get("lat"), entry.get("lng")]
+            lat = coords[0] if coords else None
+            lng = coords[1] if coords else None
             if lat is None or lng is None:
                 continue
             if not (-90 <= lat <= 90 and -180 <= lng <= 180):
