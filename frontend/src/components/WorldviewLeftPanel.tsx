@@ -268,7 +268,7 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({ data, active
                                                                 onFlyTo(pf.flight.lat, pf.flight.lng);
                                                             }
                                                             if (onEntityClick) {
-                                                                onEntityClick({ type: 'tracked_flight', id: pf.index });
+                                                                onEntityClick({ type: 'tracked_flight', id: pf.flight.icao24 });
                                                             }
                                                         }}
                                                     >
