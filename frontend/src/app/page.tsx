@@ -5,7 +5,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import dynamic from 'next/dynamic';
 import { motion } from "framer-motion";
 import WorldviewLeftPanel from "@/components/WorldviewLeftPanel";
-import WorldviewRightPanel from "@/components/WorldviewRightPanel";
+
 import NewsFeed from "@/components/NewsFeed";
 import MarketsPanel from "@/components/MarketsPanel";
 import FilterPanel from "@/components/FilterPanel";
@@ -442,10 +442,7 @@ export default function Dashboard() {
               <WorldviewLeftPanel data={data} activeLayers={activeLayers} setActiveLayers={setActiveLayers} onSettingsClick={() => setSettingsOpen(true)} onLegendClick={() => setLegendOpen(true)} gibsDate={gibsDate} setGibsDate={setGibsDate} gibsOpacity={gibsOpacity} setGibsOpacity={setGibsOpacity} onEntityClick={setSelectedEntity} onFlyTo={(lat, lng) => setFlyToLocation({ lat, lng, ts: Date.now() })} />
             </ErrorBoundary>
 
-            {/* LEFT BOTTOM - DISPLAY CONFIG */}
-            <ErrorBoundary name="WorldviewRightPanel">
-              <WorldviewRightPanel effects={effects} setEffects={setEffects} setUiVisible={setUiVisible} />
-            </ErrorBoundary>
+
           </div>
 
           {/* RIGHT HUD CONTAINER */}
