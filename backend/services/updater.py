@@ -159,7 +159,10 @@ def _extract_and_copy(zip_path: str, project_root: str, temp_dir: str) -> int:
     copied = 0
     skipped = 0
 
-    for root, _dirs, files in os.walk(base):
+    for root, dirs, files in os.walk(base):
+        # Prune protected directories so os.walk never descends into them
+        dirs[:] = [d for d in dirs if d not in _PROTECTED_DIRS]
+
         for fname in files:
             src = os.path.join(root, fname)
             rel = os.path.relpath(src, base).replace("\\", "/")
@@ -169,8 +172,8 @@ def _extract_and_copy(zip_path: str, project_root: str, temp_dir: str) -> int:
                 continue
 
             dst = os.path.join(project_root, rel)
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
             try:
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
                 shutil.copy2(src, dst)
                 copied += 1
             except (PermissionError, OSError) as e:
