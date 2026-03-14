@@ -44,7 +44,7 @@ import { EMPTY_FC } from "@/components/map/mapConstants";
 import { useImperativeSource } from "@/components/map/hooks/useImperativeSource";
 import { ClusterCountLabels, TrackedFlightLabels, CarrierLabels, UavLabels, EarthquakeLabels, ThreatMarkers } from "@/components/map/MapMarkers";
 
-const MaplibreViewer = ({ data, activeLayers, onEntityClick, flyToLocation, selectedEntity, onMouseCoords, onRightClick, regionDossier, regionDossierLoading, onViewStateChange, measureMode, onMeasureClick, measurePoints, gibsDate, gibsOpacity }: any) => {
+const MaplibreViewer = ({ data, activeLayers, onEntityClick, flyToLocation, selectedEntity, onMouseCoords, onRightClick, regionDossier, regionDossierLoading, onViewStateChange, measureMode, onMeasureClick, measurePoints, gibsDate, gibsOpacity, effects }: any) => {
     const mapRef = useRef<MapRef>(null);
     const [mapReady, setMapReady] = useState(false);
     const { theme } = useTheme();
@@ -1111,7 +1111,7 @@ const MaplibreViewer = ({ data, activeLayers, onEntityClick, flyToLocation, sele
         : 1.0;
 
     return (
-        <div className={`relative h-full w-full z-0 isolate ${selectedEntity && ['region_dossier', 'gdelt', 'liveuamap', 'news'].includes(selectedEntity.type) ? 'map-focus-active' : ''}`}>
+        <div className={`relative h-full w-full z-0 isolate ${selectedEntity && ['region_dossier', 'gdelt', 'liveuamap', 'news'].includes(selectedEntity.type) ? 'map-focus-active' : ''}`} style={effects?.bloom ? { filter: 'brightness(1.1) contrast(1.1) saturate(1.2)' } : undefined}>
             <Map
                 ref={mapRef}
                 reuseMaps
@@ -2673,8 +2673,4 @@ const MaplibreViewer = ({ data, activeLayers, onEntityClick, flyToLocation, sele
     );
 }
 
-import dynamic from "next/dynamic";
-
-export default dynamic(() => Promise.resolve(MaplibreViewer), {
-    ssr: false
-});
+export default MaplibreViewer;
