@@ -16,6 +16,7 @@ _SECRET_VARS = [
     "OPENSKY_CLIENT_SECRET",
     "LTA_ACCOUNT_KEY",
     "CORS_ORIGINS",
+    "ADMIN_KEY",
 ]
 
 for _var in _SECRET_VARS:
@@ -35,7 +36,7 @@ for _var in _SECRET_VARS:
         except Exception as _e:
             logger.error(f"Failed to read secret file {_file_path} for {_var}: {_e}")
 
-from fastapi import FastAPI, Request, Response, Query
+from fastapi import FastAPI, Request, Response, Query, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from services.data_fetcher import start_scheduler, stop_scheduler, get_latest_data, source_timestamps
@@ -44,12 +45,31 @@ from services.carrier_tracker import start_carrier_tracker, stop_carrier_tracker
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from services.schemas import HealthResponse, RefreshResponse
 import uvicorn
 import hashlib
 import json as json_mod
 import socket
+import threading
 
 limiter = Limiter(key_func=get_remote_address)
+
+# ---------------------------------------------------------------------------
+# Admin authentication — protects settings & system endpoints
+# Set ADMIN_KEY in .env or Docker secrets. If unset, endpoints remain open
+# for local-dev convenience but will log a startup warning.
+# ---------------------------------------------------------------------------
+_ADMIN_KEY = os.environ.get("ADMIN_KEY", "")
+if not _ADMIN_KEY:
+    logger.warning("ADMIN_KEY is not set — sensitive endpoints are UNPROTECTED. "
+                   "Set ADMIN_KEY in .env or Docker secrets for production.")
+
+def require_admin(request: Request):
+    """FastAPI dependency that rejects requests without a valid X-Admin-Key header."""
+    if not _ADMIN_KEY:
+        return  # No key configured — allow all (local dev)
+    if request.headers.get("X-Admin-Key") != _ADMIN_KEY:
+        raise HTTPException(status_code=403, detail="Forbidden — invalid or missing admin key")
 
 
 def _build_cors_origins():
@@ -79,8 +99,6 @@ def _build_cors_origins():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    import threading
-
     # Start AIS stream first — it loads the disk cache (instant ships) then
     # begins accumulating live vessel data via WebSocket in the background.
     start_ais_stream()
@@ -127,28 +145,42 @@ app.add_middleware(
 
 from services.data_fetcher import update_all_data
 
-_refresh_in_progress = False
+_refresh_lock = threading.Lock()
 
-@app.get("/api/refresh")
+@app.get("/api/refresh", response_model=RefreshResponse)
 @limiter.limit("2/minute")
 async def force_refresh(request: Request):
-    global _refresh_in_progress
-    if _refresh_in_progress:
+    if not _refresh_lock.acquire(blocking=False):
         return {"status": "refresh already in progress"}
-    import threading
     def _do_refresh():
-        global _refresh_in_progress
         try:
             update_all_data()
         finally:
-            _refresh_in_progress = False
-    _refresh_in_progress = True
+            _refresh_lock.release()
     t = threading.Thread(target=_do_refresh)
     t.start()
     return {"status": "refreshing in background"}
 
+@app.post("/api/ais/feed")
+@limiter.limit("60/minute")
+async def ais_feed(request: Request):
+    """Accept AIS-catcher HTTP JSON feed (POST decoded AIS messages)."""
+    from services.ais_stream import ingest_ais_catcher
+    try:
+        body = await request.json()
+    except Exception:
+        return Response(content='{"error":"invalid JSON"}', status_code=400, media_type="application/json")
+
+    msgs = body.get("msgs", [])
+    if not msgs:
+        return {"status": "ok", "ingested": 0}
+
+    count = ingest_ais_catcher(msgs)
+    return {"status": "ok", "ingested": count}
+
 @app.get("/api/live-data")
-async def live_data():
+@limiter.limit("120/minute")
+async def live_data(request: Request):
     return get_latest_data()
 
 def _etag_response(request: Request, payload: dict, prefix: str = "", default=None):
@@ -207,12 +239,14 @@ async def live_data_slow(request: Request):
     return _etag_response(request, payload, prefix="slow|", default=str)
 
 @app.get("/api/debug-latest")
-async def debug_latest_data():
+@limiter.limit("30/minute")
+async def debug_latest_data(request: Request):
     return list(get_latest_data().keys())
 
 
-@app.get("/api/health")
-async def health_check():
+@app.get("/api/health", response_model=HealthResponse)
+@limiter.limit("30/minute")
+async def health_check(request: Request):
     import time
     d = get_latest_data()
     last = d.get("last_updated")
@@ -241,19 +275,24 @@ _start_time = __import__("time").time()
 from services.radio_intercept import get_top_broadcastify_feeds, get_openmhz_systems, get_recent_openmhz_calls, find_nearest_openmhz_system
 
 @app.get("/api/radio/top")
-async def get_top_radios():
+@limiter.limit("30/minute")
+async def get_top_radios(request: Request):
     return get_top_broadcastify_feeds()
 
 @app.get("/api/radio/openmhz/systems")
-async def api_get_openmhz_systems():
+@limiter.limit("30/minute")
+async def api_get_openmhz_systems(request: Request):
     return get_openmhz_systems()
 
 @app.get("/api/radio/openmhz/calls/{sys_name}")
-async def api_get_openmhz_calls(sys_name: str):
+@limiter.limit("60/minute")
+async def api_get_openmhz_calls(request: Request, sys_name: str):
     return get_recent_openmhz_calls(sys_name)
 
 @app.get("/api/radio/nearest")
+@limiter.limit("60/minute")
 async def api_get_nearest_radio(
+    request: Request,
     lat: float = Query(..., ge=-90, le=90),
     lng: float = Query(..., ge=-180, le=180),
 ):
@@ -262,7 +301,9 @@ async def api_get_nearest_radio(
 from services.radio_intercept import find_nearest_openmhz_systems_list
 
 @app.get("/api/radio/nearest-list")
+@limiter.limit("60/minute")
 async def api_get_nearest_radios_list(
+    request: Request,
     lat: float = Query(..., ge=-90, le=90),
     lng: float = Query(..., ge=-180, le=180),
     limit: int = Query(5, ge=1, le=20),
@@ -272,7 +313,8 @@ async def api_get_nearest_radios_list(
 from services.network_utils import fetch_with_curl
 
 @app.get("/api/route/{callsign}")
-async def get_flight_route(callsign: str, lat: float = 0.0, lng: float = 0.0):
+@limiter.limit("60/minute")
+async def get_flight_route(request: Request, callsign: str, lat: float = 0.0, lng: float = 0.0):
     r = fetch_with_curl("https://api.adsb.lol/api/0/routeset", method="POST", json_data={"planes": [{"callsign": callsign, "lat": lat, "lng": lng}]}, timeout=10)
     if r and r.status_code == 200:
         data = r.json()
@@ -330,12 +372,14 @@ class ApiKeyUpdate(BaseModel):
     env_key: str
     value: str
 
-@app.get("/api/settings/api-keys")
-async def api_get_keys():
+@app.get("/api/settings/api-keys", dependencies=[Depends(require_admin)])
+@limiter.limit("30/minute")
+async def api_get_keys(request: Request):
     return get_api_keys()
 
-@app.put("/api/settings/api-keys")
-async def api_update_key(body: ApiKeyUpdate):
+@app.put("/api/settings/api-keys", dependencies=[Depends(require_admin)])
+@limiter.limit("10/minute")
+async def api_update_key(request: Request, body: ApiKeyUpdate):
     ok = update_api_key(body.env_key, body.value)
     if ok:
         return {"status": "updated", "env_key": body.env_key}
@@ -347,10 +391,12 @@ async def api_update_key(body: ApiKeyUpdate):
 from services.news_feed_config import get_feeds, save_feeds, reset_feeds
 
 @app.get("/api/settings/news-feeds")
-async def api_get_news_feeds():
+@limiter.limit("30/minute")
+async def api_get_news_feeds(request: Request):
     return get_feeds()
 
-@app.put("/api/settings/news-feeds")
+@app.put("/api/settings/news-feeds", dependencies=[Depends(require_admin)])
+@limiter.limit("10/minute")
 async def api_save_news_feeds(request: Request):
     body = await request.json()
     ok = save_feeds(body)
@@ -362,8 +408,9 @@ async def api_save_news_feeds(request: Request):
         media_type="application/json",
     )
 
-@app.post("/api/settings/news-feeds/reset")
-async def api_reset_news_feeds():
+@app.post("/api/settings/news-feeds/reset", dependencies=[Depends(require_admin)])
+@limiter.limit("10/minute")
+async def api_reset_news_feeds(request: Request):
     ok = reset_feeds()
     if ok:
         return {"status": "reset", "feeds": get_feeds()}
@@ -375,7 +422,7 @@ async def api_reset_news_feeds():
 from pathlib import Path
 from services.updater import perform_update, schedule_restart
 
-@app.post("/api/system/update")
+@app.post("/api/system/update", dependencies=[Depends(require_admin)])
 @limiter.limit("1/minute")
 async def system_update(request: Request):
     """Download latest release, backup current files, extract update, and restart."""
@@ -388,7 +435,6 @@ async def system_update(request: Request):
             media_type="application/json",
         )
     # Schedule restart AFTER response flushes (2s delay)
-    import threading
     threading.Timer(2.0, schedule_restart, args=[project_root]).start()
     return result
 
