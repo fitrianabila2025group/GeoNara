@@ -135,7 +135,7 @@ async def lifespan(app: FastAPI):
     stop_scheduler()
     stop_carrier_tracker()
 
-app = FastAPI(title=\"Geonara Situational Awareness API\", lifespan=lifespan)
+app = FastAPI(title="Geonara Situational Awareness API", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
