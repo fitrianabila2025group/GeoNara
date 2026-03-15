@@ -270,6 +270,10 @@ def _ais_stream_loop():
     import subprocess
     import os
 
+    if not API_KEY:
+        logger.warning("AIS_API_KEY not set — AIS maritime tracking disabled. Set the env var to enable.")
+        return
+
     proxy_script = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ais_proxy.js")
     backoff = 1  # Exponential backoff starting at 1 second
 

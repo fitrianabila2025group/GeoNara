@@ -45,6 +45,17 @@ COPY --from=frontend-builder /app/frontend/.next/static ./.next/static
 
 # ── Supervisor config — runs both processes ──
 WORKDIR /app
+# Startup script — handles PORT properly at runtime
+COPY <<'SCRIPT' /app/start.sh
+#!/bin/sh
+set -e
+export PORT="${PORT:-3000}"
+export BACKEND_URL="http://localhost:8000"
+echo "[Geonara] Starting backend on :8000 and frontend on :${PORT}"
+supervisord -c /etc/supervisor/conf.d/geonara.conf
+SCRIPT
+RUN chmod +x /app/start.sh
+
 COPY <<'EOF' /etc/supervisor/conf.d/geonara.conf
 [supervisord]
 nodaemon=true
@@ -54,20 +65,25 @@ logfile_maxbytes=0
 pidfile=/tmp/supervisord.pid
 
 [program:backend]
-command=sh -c "uvicorn main:app --host 0.0.0.0 --port 8000"
+command=uvicorn main:app --host 0.0.0.0 --port 8000
 directory=/app/backend
 autostart=true
 autorestart=true
+startretries=3
+startsecs=10
 stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
 
 [program:frontend]
-command=sh -c "PORT=%(ENV_PORT)s BACKEND_URL=http://localhost:8000 node server.js"
+command=node server.js
 directory=/app/frontend
 autostart=true
 autorestart=true
+startretries=3
+startsecs=5
+environment=HOSTNAME="0.0.0.0",BACKEND_URL="http://localhost:8000"
 stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr
@@ -82,4 +98,4 @@ EXPOSE ${PORT}
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/api/live-data/fast && curl -f http://localhost:${PORT}/ || exit 1
 
-CMD ["supervisord", "-c", "/etc/supervisor/conf.d/geonara.conf"]
+CMD ["/app/start.sh"]
