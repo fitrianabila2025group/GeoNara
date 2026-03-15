@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180">
+  <!-- Solid dark background -->
+  <rect width="180" height="180" rx="36" fill="#0a0e1a"/>
+  <!-- Outer ring -->
+  <circle cx="90" cy="90" r="72" fill="none" stroke="#06b6d4" stroke-width="4"/>
+  <!-- Inner glow -->
+  <circle cx="90" cy="90" r="28" fill="#06b6d4" fill-opacity="0.2"/>
+  <!-- Equatorial ellipse -->
+  <ellipse cx="90" cy="90" rx="55" ry="30" fill="none" stroke="#06b6d4" stroke-opacity="0.45" stroke-width="2.5"/>
+  <!-- Meridian ellipse -->
+  <ellipse cx="90" cy="90" rx="30" ry="55" fill="none" stroke="#06b6d4" stroke-opacity="0.45" stroke-width="2.5"/>
+  <!-- Crosshair vertical -->
+  <line x1="90" y1="12" x2="90" y2="168" stroke="#06b6d4" stroke-width="3" stroke-opacity="0.7"/>
+  <!-- Crosshair horizontal -->
+  <line x1="12" y1="90" x2="168" y2="90" stroke="#06b6d4" stroke-width="3" stroke-opacity="0.7"/>
+  <!-- Center dot -->
+  <circle cx="90" cy="90" r="8" fill="#06b6d4"/>
+</svg>
